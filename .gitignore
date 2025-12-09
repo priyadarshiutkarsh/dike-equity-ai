@@ -1,6 +1,5 @@
 # Dependencies
-# node_modules/ - Commented out to allow committing node_modules
-package-lock.json
+node_modules/
 
 # Build outputs
 dist/
