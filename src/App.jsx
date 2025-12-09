@@ -82,7 +82,8 @@ function App() {
     setAnalysis(null);
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      // In production, API routes are on the same domain. In dev, use localhost:3001
+      const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3001' : '');
       const response = await fetch(`${apiUrl}/api/analyze`, {
         method: 'POST',
         headers: {
