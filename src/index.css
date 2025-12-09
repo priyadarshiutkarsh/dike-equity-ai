@@ -270,6 +270,33 @@
     0%, 100% { background-position: 0% 50%; }
     50% { background-position: 100% 50%; }
   }
+  
+  @keyframes fade-in-out {
+    0% { 
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    8.33% { 
+      opacity: 1;
+      transform: translateY(0);
+    }
+    16.66% { 
+      opacity: 1;
+      transform: translateY(0);
+    }
+    25% { 
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+  }
+  
+  .animate-fade-in-out {
+    animation: fade-in-out 12s ease-in-out infinite;
+  }
 }
 
 /* Custom scrollbar - Dark theme */

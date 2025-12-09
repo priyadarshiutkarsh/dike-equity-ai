@@ -1,21 +1,21 @@
 import React, { useState } from 'react';
 import { 
-  AlertCircle, BookOpen, CheckCircle2, Copy, Printer, Sparkles, AlertTriangle, Loader2,
+  AlertCircle, BookOpen, CheckCircle, CheckCircle2, Copy, Printer, Sparkles, AlertTriangle, Loader2,
   Users, DollarSign, Wifi, Clock, Accessibility, Globe, Search, Send, Zap, TrendingUp,
   Brain, Shield, ArrowRight, Info, Star, Target, ExternalLink, Award, BarChart3, MessageSquare, 
-  Lightbulb, FileText, Download, User, Briefcase, GraduationCap, Languages, Calculator, Eye
+  Lightbulb, FileText, Download, User, Briefcase, GraduationCap, Languages, Calculator, Eye, Upload
 } from 'lucide-react';
 
 const EXAMPLE_ASSIGNMENTS = [
-  "Create a video presentation explaining photosynthesis. Record yourself presenting using PowerPoint or similar software. Upload the final video to Canvas by Friday at 11:59 PM. Video should be 3-5 minutes long.",
-  "Read Chapter 5 in the textbook and complete the Google Form quiz. Then join our Zoom discussion on Wednesday at 7 PM EST to share your reflections with the class.",
-  "Work in groups of 4-5 students to research a historical event. Create a shared Google Slides presentation with embedded videos and images. Present to the class next week during your assigned time slot.",
-  "Complete the lab experiment at home using the chemistry kit provided. Take photos of each step and write a detailed lab report in MLA format. Submit both photos and report through the online portal by Sunday evening."
+  "Create 5 min PowerPoint video presentation, upload to Canvas by Fri 11:59 PM",
+  "Read Ch. 5, complete Google Form quiz, join Zoom discussion Wed 7 PM EST",
+  "Groups of 4 to 5: Create Slides on historical event, present next week",
+  "Complete home lab with kit, photo document, submit report by Sunday"
 ];
 
 function App() {
   const [assignmentText, setAssignmentText] = useState('');
-  const [apiKey, setApiKey] = useState('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');
+  const [apiKey, setApiKey] = useState(import.meta.env.VITE_OPENROUTER_API_KEY || '');
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -24,6 +24,10 @@ function App() {
   const [gradeLevel, setGradeLevel] = useState('college');
   const [courseType, setCourseType] = useState('general');
   const [focusArea, setFocusArea] = useState('all');
+  
+  // LMS Export state
+  const [showLMSExport, setShowLMSExport] = useState(false);
+  const [exportSuccess, setExportSuccess] = useState('');
   
   // New state for enhanced features
   const [selectedPersona, setSelectedPersona] = useState(null);
@@ -41,28 +45,28 @@ function App() {
       id: 'working',
       name: 'Working Student',
       icon: Briefcase,
-      description: 'Works 20-30 hours/week, limited evening availability',
+      description: 'Works 20 to 30 hours per week',
       constraints: ['Limited time after 6 PM', 'Weekend work shifts', 'No expensive software', 'Needs flexible deadlines']
     },
     {
       id: 'esl',
       name: 'ESL Learner',
       icon: Languages,
-      description: 'English as second language, strong content knowledge',
+      description: 'English as second language',
       constraints: ['Complex reading takes longer', 'Verbal presentations challenging', 'Written assignments need more time', 'Visual aids helpful']
     },
     {
       id: 'caregiver',
       name: 'Family Caregiver',
       icon: User,
-      description: 'Cares for family members, unpredictable schedule',
+      description: 'Unpredictable schedule',
       constraints: ['Sudden schedule changes', 'Limited childcare', 'Home internet interruptions', 'Needs recorded content']
     },
     {
-      id: 'first-gen',
-      name: 'First-Gen Student',
+      id: 'firstgen',
+      name: 'First Generation Student',
       icon: GraduationCap,
-      description: 'First in family to attend college, learning academic norms',
+      description: 'First in family to attend college',
       constraints: ['Unfamiliar with academic tools', 'Limited family support', 'Works to support family', 'Needs clear instructions']
     }
   ];
@@ -77,55 +81,27 @@ function App() {
     setLoading(true);
     setAnalysis(null);
 
-    const contextPrompt = `
-Grade Level: ${gradeLevel}
-Course Type: ${courseType}
-Focus Area: ${focusArea === 'all' ? 'All equity dimensions' : focusArea}
-    `.trim();
-
     try {
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${apiUrl}/api/analyze`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'HTTP-Referer': window.location.origin,
-          'X-Title': 'Social Justice Assignment Analyzer',
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'meta-llama/llama-3.3-70b-instruct:free',
-          messages: [
-            { role: 'system', content: `You are an expert educational equity analyst. Analyze assignments for: SOCIOECONOMIC BARRIERS, DIGITAL ACCESS, TIME/SCHEDULING, CULTURAL ASSUMPTIONS, ACCESSIBILITY, LANGUAGE/LITERACY. 
-
-CRITICAL FORMATTING RULES:
-1. Return ONLY valid JSON, no other text
-2. NEVER use hyphens or dashes in any text output, use commas, semicolons, or periods instead
-3. Format all text beautifully with proper punctuation and spacing
-4. For researchBasis: write ONLY the citation text WITHOUT any URLs (example: "Research by Smith et al. in the Journal of Education found that...")
-5. For researchLink: include the full working URL to the research (must be real URL from Google Scholar, ERIC, or .edu domains)
-6. NEVER include URLs in the researchBasis text, ONLY in the researchLink field
-7. Make text flow naturally without line breaks or awkward formatting
-
-Use this exact structure:
-{"overallScore": number, "summary": "text", "barriers": [{"category": "text", "severity": "High|Medium|Low", "issue": "text", "impact": "text", "suggestions": ["text"], "researchBasis": "citation text WITHOUT URL", "researchLink": "https://actual-research-url.edu"}], "strengths": ["text"], "recommendations": ["text"]}` },
-            { role: 'user', content: `Analyze this assignment for equity concerns:
-
-Context: ${contextPrompt}
-
-Assignment: "${assignmentText}"
-
-Provide comprehensive analysis. Return ONLY JSON, no markdown, no explanations, just the JSON object. Remember: NO HYPHENS anywhere, NO URLs in researchBasis text (URLs ONLY in researchLink field).` }
-          ],
-          temperature: 0.7,
-          max_tokens: 2000
+          assignmentText,
+          gradeLevel,
+          courseType,
+          focusArea
         })
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error('OpenRouter API Error:', errorData);
-        throw new Error(errorData.error?.message || `API Error: ${response.status} ${response.statusText}`);
+        console.error('API Error:', errorData);
+        throw new Error(errorData.error || `API Error: ${response.status} ${response.statusText}`);
       }
+      
       const data = await response.json();
       const content = data.choices[0].message.content;
       
@@ -192,6 +168,80 @@ Provide comprehensive analysis. Return ONLY JSON, no markdown, no explanations, 
     navigator.clipboard.writeText(analysis.reformattedAssignment);
     setCopiedReformat(true);
     setTimeout(() => setCopiedReformat(false), 2000);
+  };
+
+  // LMS Export Functions
+  const exportToCanvas = () => {
+    const canvasFormat = {
+      title: "Equity Improved Assignment",
+      description: analysis?.reformattedAssignment || assignmentText,
+      points_possible: 100,
+      assignment_group_id: null,
+      grading_type: "points",
+      submission_types: ["online_text_entry", "online_upload"],
+      published: false
+    };
+    
+    const dataStr = JSON.stringify(canvasFormat, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'canvas_assignment.json';
+    link.click();
+    
+    setExportSuccess('Canvas');
+    setTimeout(() => setExportSuccess(''), 3000);
+  };
+
+  const exportToGoogleClassroom = () => {
+    const gcFormat = `Assignment Title: Equity-Improved Assignment
+
+Description:
+${analysis?.reformattedAssignment || assignmentText}
+
+---
+EQUITY ANALYSIS SUMMARY
+Overall Equity Score: ${analysis?.overallScore}/100
+
+Key Improvements Made:
+${analysis?.recommendations?.map((r, i) => `${i + 1}. ${r}`).join('\n') || 'See full analysis for details'}
+
+This assignment has been analyzed and improved for educational equity using DIKE AI.
+`;
+    
+    const dataBlob = new Blob([gcFormat], { type: 'text/plain' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'google_classroom_assignment.txt';
+    link.click();
+    
+    setExportSuccess('Google Classroom');
+    setTimeout(() => setExportSuccess(''), 3000);
+  };
+
+  const exportToBlackboard = () => {
+    const bbFormat = `<?xml version="1.0" encoding="UTF-8"?>
+<CONTENT>
+  <TITLE>Equity-Improved Assignment</TITLE>
+  <BODY>${(analysis?.reformattedAssignment || assignmentText).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</BODY>
+  <CONTENTHANDLER>resource/x-bb-assignment</CONTENTHANDLER>
+  <FLAGS>
+    <ISENABLED>true</ISENABLED>
+    <ISAVAILABLE>true</ISAVAILABLE>
+  </FLAGS>
+</CONTENT>`;
+    
+    const dataBlob = new Blob([bbFormat], { type: 'text/xml' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'blackboard_assignment.xml';
+    link.click();
+    
+    setExportSuccess('Blackboard');
+    setTimeout(() => setExportSuccess(''), 3000);
   };
 
   const getSeverityColor = (severity) => {
@@ -419,17 +469,18 @@ Answer follow-up questions about barriers, suggest improvements, and provide res
               <div className="flex items-center gap-5">
                 <div className="relative group">
                   <div className="absolute inset-0 bg-gradient-to-br from-purple-500 via-pink-500 to-blue-500 rounded-2xl blur-lg opacity-60 group-hover:opacity-80 transition-opacity"></div>
-                  <div className="relative p-3.5 bg-gradient-to-br from-purple-500 via-pink-500 to-blue-500 rounded-2xl shadow-2xl">
-                    <Shield className="w-7 h-7 text-white" />
+                  <div className="relative p-2.5 bg-gradient-to-br from-purple-500 via-pink-500 to-blue-500 rounded-2xl shadow-2xl flex items-center justify-center">
+                    <img 
+                      src="/images/dike-ai-logo.png" 
+                      alt="DIKE AI Logo" 
+                      className="w-11 h-11 object-contain"
+                    />
                   </div>
                 </div>
-                <div className="space-y-1">
+                <div>
                   <h1 className="text-[28px] font-bold tracking-tight text-white leading-none">
-                    DIKE
+                    DIKE AI
                   </h1>
-                  <p className="text-[13px] text-gray-400 font-medium">
-                    AI powered equity analysis for inclusive education
-                  </p>
                 </div>
               </div>
               <div className="hidden md:flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-white/[0.04] border border-white/[0.08] backdrop-blur-xl">
@@ -469,7 +520,7 @@ Answer follow-up questions about barriers, suggest improvements, and provide res
               <div className="flex flex-wrap items-center justify-center gap-3 pt-6">
                 {[
                   { icon: Shield, text: '6 Equity Dimensions' },
-                  { icon: BookOpen, text: 'Research-Backed' },
+                  { icon: BookOpen, text: 'Research Backed' },
                   { icon: Zap, text: 'Instant Analysis' },
                   { icon: Target, text: 'Actionable Insights' }
                 ].map((feature, idx) => (
@@ -491,22 +542,22 @@ Answer follow-up questions about barriers, suggest improvements, and provide res
                   <div className="mt-6 p-8 bg-gradient-to-br from-white/[0.04] to-white/[0.02] rounded-3xl border border-white/[0.08] backdrop-blur-xl">
                     <div className="grid md:grid-cols-2 gap-5">
                       {[
-                        { icon: <DollarSign className="w-5 h-5" />, title: 'Socioeconomic', desc: 'Financial barriers, required purchases, access to resources', color: 'from-purple-500/20 to-purple-600/10' },
-                        { icon: <Wifi className="w-5 h-5" />, title: 'Digital Access', desc: 'Technology requirements, internet connectivity, software costs', color: 'from-blue-500/20 to-blue-600/10' },
-                        { icon: <Clock className="w-5 h-5" />, title: 'Time & Scheduling', desc: 'Deadlines, time zones, work/family obligations', color: 'from-orange-500/20 to-orange-600/10' },
-                        { icon: <Globe className="w-5 h-5" />, title: 'Cultural & Linguistic', desc: 'Language barriers, cultural assumptions, diverse perspectives', color: 'from-purple-500/20 to-purple-600/10' },
-                        { icon: <Accessibility className="w-5 h-5" />, title: 'Accessibility', desc: 'Disabilities, sensory needs, assistive technology', color: 'from-pink-500/20 to-pink-600/10' },
-                        { icon: <Users className="w-5 h-5" />, title: 'Learning Supports', desc: 'Prior knowledge, learning differences, executive function', color: 'from-indigo-500/20 to-indigo-600/10' }
+                        { icon: <DollarSign className="w-5 h-5" />, title: 'Socioeconomic', desc: 'Financial barriers and required purchases', color: 'from-purple-500/20 to-purple-600/10' },
+                        { icon: <Wifi className="w-5 h-5" />, title: 'Digital Access', desc: 'Technology requirements and connectivity', color: 'from-blue-500/20 to-blue-600/10' },
+                        { icon: <Clock className="w-5 h-5" />, title: 'Time & Scheduling', desc: 'Deadlines, time zones, and obligations', color: 'from-orange-500/20 to-orange-600/10' },
+                        { icon: <Globe className="w-5 h-5" />, title: 'Cultural & Linguistic', desc: 'Language barriers and cultural assumptions', color: 'from-purple-500/20 to-purple-600/10' },
+                        { icon: <Accessibility className="w-5 h-5" />, title: 'Accessibility', desc: 'Disabilities and assistive technology needs', color: 'from-pink-500/20 to-pink-600/10' },
+                        { icon: <Users className="w-5 h-5" />, title: 'Learning Supports', desc: 'Prior knowledge and learning differences', color: 'from-indigo-500/20 to-indigo-600/10' }
                       ].map((dim, idx) => (
-                        <div key={idx} className="flex items-start gap-4 p-5 bg-white/[0.03] hover:bg-white/[0.05] rounded-2xl border border-white/[0.08] hover:border-white/[0.12] transition-all duration-200">
+                        <div key={idx} className="flex items-center gap-4 p-5 bg-white/[0.03] hover:bg-white/[0.05] rounded-2xl border border-white/[0.08] hover:border-white/[0.12] transition-all duration-200">
                           <div className={`p-3 bg-gradient-to-br ${dim.color} rounded-xl flex-shrink-0 border border-white/[0.08]`}>
                             <div className="text-white">
                               {dim.icon}
                             </div>
                           </div>
-                          <div className="flex-1 pt-0.5">
-                            <div className="font-bold text-[15px] text-gray-100 mb-2 leading-tight">{dim.title}</div>
-                            <div className="text-[13px] text-gray-400 leading-[1.7]">{dim.desc}</div>
+                          <div className="flex-1">
+                            <div className="font-bold text-[15px] text-gray-100 mb-1.5 leading-tight">{dim.title}</div>
+                            <div className="text-[13px] text-gray-400 leading-snug">{dim.desc}</div>
                           </div>
                         </div>
                       ))}
@@ -540,9 +591,9 @@ Answer follow-up questions about barriers, suggest improvements, and provide res
                   <div className="relative">
                     <textarea
                       className="w-full px-6 py-5 bg-black/40 border border-white/[0.08] rounded-[20px] text-white placeholder-gray-500 focus:border-purple-500/40 focus:ring-4 focus:ring-purple-500/10 focus:bg-black/60 focus:outline-none transition-all duration-300 min-h-[220px] resize-none text-[15px] leading-[1.7] font-normal"
-                      placeholder="Paste your assignment here (minimum 50 characters)...
+                      placeholder="Enter your assignment description here (minimum 50 characters)
 
-Example: Create a video presentation explaining the water cycle. Use PowerPoint or similar software to create slides, then record yourself presenting. Upload the final video to the class portal by Friday at 11:59 PM."
+Example: Read Chapter 3, complete the online quiz on Google Forms, and join our class discussion on Zoom this Wednesday at 6 PM EST."
                       value={assignmentText}
                       onChange={(e) => { setAssignmentText(e.target.value); setError(''); }}
                     />
@@ -573,7 +624,7 @@ Example: Create a video presentation explaining the water cycle. Use PowerPoint 
                         onClick={() => { setAssignmentText(example); setError(''); }}
                         className="px-5 py-4 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-purple-500/30 text-left text-gray-300 text-[13px] rounded-2xl transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] leading-[1.6]"
                       >
-                        <span className="font-semibold text-purple-400">Example {idx + 1}:</span> {example.substring(0, 80)}...
+                        <span className="font-semibold text-purple-400">Example {idx + 1}:</span> {example}
                       </button>
                     ))}
                   </div>
@@ -716,11 +767,27 @@ Example: Create a video presentation explaining the water cycle. Use PowerPoint 
                   <div className="absolute inset-0 bg-purple-500/30 rounded-full blur-3xl animate-pulse"></div>
                   <Loader2 className="relative w-20 h-20 text-purple-400 animate-spin" />
                 </div>
-                <div className="space-y-3 max-w-lg">
-                  <h4 className="text-2xl font-bold text-white">Analyzing Your Assignment</h4>
-                  <p className="text-[14px] text-gray-400 leading-relaxed">
-                    Evaluating across 6 equity dimensions • Consulting UDL guidelines • Generating thoughtful recommendations • Creating improved version
-                  </p>
+                <div className="space-y-6 max-w-2xl">
+                  <h4 className="text-2xl font-bold text-white text-center">Analyzing Your Assignment</h4>
+                  <div className="relative h-16 flex items-center justify-center">
+                    {[
+                      "Examining equity dimensions",
+                      "Applying UDL principles", 
+                      "Synthesizing research based insights",
+                      "Crafting actionable recommendations"
+                    ].map((text, index) => (
+                      <p 
+                        key={index}
+                        className="absolute text-[15px] text-gray-300 font-medium text-center animate-fade-in-out"
+                        style={{
+                          animationDelay: `${index * 3}s`,
+                          opacity: 0
+                        }}
+                      >
+                        {text}
+                      </p>
+                    ))}
+                  </div>
                   <div className="flex items-center justify-center gap-1.5 pt-2">
                     {[0, 1, 2].map((i) => (
                       <div key={i} className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" style={{animationDelay: `${i * 0.2}s`}}></div>
@@ -734,18 +801,26 @@ Example: Create a video presentation explaining the water cycle. Use PowerPoint 
           {/* Results */}
           {analysis && !loading && (
             <div className="space-y-8 animate-fade-in">
-              {/* Print-only header */}
+              {/* Print-only professional header */}
               <div className="print-only print-header">
-                <h1>SOCIAL JUSTICE ASSIGNMENT ANALYSIS</h1>
-                <p>Comprehensive Equity Evaluation Report</p>
-                <p><strong>Generated:</strong> {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
-                <p><strong>Created by:</strong> Utkarsh Priyadarshi | EdPol 212: Education for Social Justice</p>
+                <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '3px solid #8b5cf6', paddingBottom: '15px', marginBottom: '20px'}}>
+                  <div>
+                    <h1 style={{fontSize: '28px', fontWeight: 'bold', color: '#000', margin: '0 0 5px 0', letterSpacing: '-0.5px'}}>DIKE AI</h1>
+                    <p style={{fontSize: '11px', color: '#666', margin: 0}}>Educational Equity Analysis Report</p>
+                  </div>
+                  <div style={{textAlign: 'right', fontSize: '10px', color: '#666'}}>
+                    <p style={{margin: '0 0 3px 0'}}><strong>Generated:</strong> {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                    <p style={{margin: 0}}><strong>Report ID:</strong> {Date.now().toString(36).toUpperCase()}</p>
+                  </div>
+                </div>
               </div>
 
-              {/* Print-only assignment text */}
-              <div className="print-only" style={{marginTop: '20px', marginBottom: '20px', padding: '15px', border: '1px solid #000', background: '#f9f9f9'}}>
-                <h2 style={{marginTop: 0}}>Assignment Analyzed</h2>
-                <p style={{whiteSpace: 'pre-wrap', lineHeight: '1.6'}}>{assignmentText}</p>
+              {/* Print-only assignment section */}
+              <div className="print-only" style={{marginBottom: '25px', pageBreakInside: 'avoid'}}>
+                <h2 style={{fontSize: '16px', fontWeight: 'bold', color: '#000', marginTop: 0, marginBottom: '10px', borderBottom: '2px solid #e5e7eb', paddingBottom: '5px'}}>ASSIGNMENT ANALYZED</h2>
+                <div style={{padding: '12px', border: '1px solid #d1d5db', background: '#f9fafb', borderRadius: '4px'}}>
+                  <p style={{whiteSpace: 'pre-wrap', lineHeight: '1.6', margin: 0, fontSize: '10pt'}}>{assignmentText}</p>
+                </div>
               </div>
 
               {/* Header Bar - Hide on print */}
@@ -755,14 +830,120 @@ Example: Create a video presentation explaining the water cycle. Use PowerPoint 
                   <p className="text-[13px] text-gray-400">Comprehensive equity evaluation with actionable insights</p>
                 </div>
                 <div className="flex gap-3">
-                  <button onClick={copyAnalysis} className="px-5 py-3 bg-white/[0.05] hover:bg-white/[0.08] border border-white/[0.08] hover:border-emerald-500/30 text-gray-300 hover:text-emerald-400 rounded-2xl transition-all duration-200 flex items-center gap-2.5 text-[13px] font-semibold">
-                    {copied ? <><CheckCircle2 className="w-4 h-4" />Copied!</> : <><Copy className="w-4 h-4" />Copy</>}
+                  <button 
+                    onClick={() => setShowLMSExport(!showLMSExport)} 
+                    className="px-5 py-3 bg-gradient-to-r from-purple-500/20 to-blue-500/20 hover:from-purple-500/30 hover:to-blue-500/30 border border-purple-500/40 hover:border-purple-400/60 text-purple-300 hover:text-purple-200 rounded-2xl transition-all duration-200 flex items-center gap-2.5 text-[13px] font-semibold"
+                  >
+                    <Upload className="w-4 h-4" />Export to LMS
                   </button>
                   <button onClick={() => window.print()} className="px-5 py-3 bg-white/[0.05] hover:bg-white/[0.08] border border-white/[0.08] hover:border-blue-500/30 text-gray-300 hover:text-blue-400 rounded-2xl transition-all duration-200 flex items-center gap-2.5 text-[13px] font-semibold">
-                    <Printer className="w-4 h-4" />Print
+                    <Printer className="w-4 h-4" />Print Report
                   </button>
                 </div>
               </div>
+
+              {/* LMS Export Modal */}
+              {showLMSExport && (
+                <div className="mb-8 bg-gradient-to-br from-purple-500/10 via-blue-500/5 to-pink-500/5 backdrop-blur-xl rounded-[28px] border border-white/[0.1] p-8 no-print">
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h4 className="text-xl font-bold text-white mb-1">Export to Learning Management System</h4>
+                      <p className="text-[13px] text-gray-400">Download assignment in your LMS format</p>
+                    </div>
+                    <button 
+                      onClick={() => setShowLMSExport(false)}
+                      className="text-gray-400 hover:text-white transition-colors"
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  
+                  {exportSuccess && (
+                    <div className="mb-4 p-4 bg-green-500/20 border border-green-500/40 rounded-xl flex items-center gap-3">
+                      <CheckCircle2 className="w-5 h-5 text-green-400" />
+                      <span className="text-green-300 text-[14px] font-medium">Successfully exported for {exportSuccess}!</span>
+                    </div>
+                  )}
+                  
+                  <div className="grid md:grid-cols-3 gap-4">
+                    {/* Canvas LMS */}
+                    <button
+                      onClick={exportToCanvas}
+                      className="p-6 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-orange-500/40 rounded-2xl transition-all duration-200 group text-left"
+                    >
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="p-3 bg-orange-500/20 rounded-xl group-hover:bg-orange-500/30 transition-colors">
+                          <svg className="w-6 h-6 text-orange-400" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 22C6.486 22 2 17.514 2 12S6.486 2 12 2s10 4.486 10 10-4.486 10-10 10z"/>
+                            <path d="M16 8h-3V6a1 1 0 00-2 0v2H8a1 1 0 000 2h3v3a1 1 0 002 0v-3h3a1 1 0 000-2z"/>
+                          </svg>
+                        </div>
+                        <div>
+                          <h5 className="font-bold text-white text-[15px]">Canvas LMS</h5>
+                          <p className="text-[12px] text-gray-400">JSON format</p>
+                        </div>
+                      </div>
+                      <p className="text-[13px] text-gray-400 leading-relaxed">
+                        Export as Canvas-compatible JSON file for easy import
+                      </p>
+                    </button>
+
+                    {/* Google Classroom */}
+                    <button
+                      onClick={exportToGoogleClassroom}
+                      className="p-6 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-blue-500/40 rounded-2xl transition-all duration-200 group text-left"
+                    >
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="p-3 bg-blue-500/20 rounded-xl group-hover:bg-blue-500/30 transition-colors">
+                          <svg className="w-6 h-6 text-blue-400" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M1.636 11.636L12 22l10.364-10.364L12 1.272 1.636 11.636zm7.455 0L12 8.727l2.909 2.909L12 14.545l-2.909-2.909z"/>
+                          </svg>
+                        </div>
+                        <div>
+                          <h5 className="font-bold text-white text-[15px]">Google Classroom</h5>
+                          <p className="text-[12px] text-gray-400">Text format</p>
+                        </div>
+                      </div>
+                      <p className="text-[13px] text-gray-400 leading-relaxed">
+                        Download formatted text to paste into Google Classroom
+                      </p>
+                    </button>
+
+                    {/* Blackboard */}
+                    <button
+                      onClick={exportToBlackboard}
+                      className="p-6 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-purple-500/40 rounded-2xl transition-all duration-200 group text-left"
+                    >
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="p-3 bg-purple-500/20 rounded-xl group-hover:bg-purple-500/30 transition-colors">
+                          <svg className="w-6 h-6 text-purple-400" fill="currentColor" viewBox="0 0 24 24">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            <path fill="#000" d="M7 7h10v2H7zm0 4h10v2H7zm0 4h7v2H7z"/>
+                          </svg>
+                        </div>
+                        <div>
+                          <h5 className="font-bold text-white text-[15px]">Blackboard</h5>
+                          <p className="text-[12px] text-gray-400">XML format</p>
+                        </div>
+                      </div>
+                      <p className="text-[13px] text-gray-400 leading-relaxed">
+                        Export as Blackboard-compatible XML for import
+                      </p>
+                    </button>
+                  </div>
+
+                  <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+                    <div className="flex items-start gap-3">
+                      <Info className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                      <div className="text-[13px] text-gray-300 leading-relaxed">
+                        <strong className="text-blue-300">Note:</strong> These exports include your equity improved assignment. Follow your LMS's import instructions to upload the file.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Score Card */}
               <div className="bg-gradient-to-br from-purple-500/10 via-pink-500/5 to-blue-500/10 backdrop-blur-2xl rounded-[32px] border border-white/[0.08] p-10 relative overflow-hidden print-score-card print-avoid-break">
@@ -773,7 +954,31 @@ Example: Create a video presentation explaining the water cycle. Use PowerPoint 
                     <div className="p-2.5 bg-purple-500/20 rounded-xl">
                       <TrendingUp className="w-6 h-6 text-purple-400" />
                     </div>
-                    <h4 className="text-2xl font-bold text-white">Overall Equity Score</h4>
+                    <div className="flex items-center gap-3">
+                      <h4 className="text-2xl font-bold text-white">Overall Equity Score</h4>
+                      <div className="group relative">
+                        <Info className="w-5 h-5 text-purple-400 hover:text-purple-300 cursor-help transition-colors" />
+                        <div className="absolute left-0 top-full mt-3 w-[340px] p-5 bg-gray-800/95 backdrop-blur-xl border-2 border-purple-500/30 rounded-2xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-[100]">
+                          <div className="text-[13px] text-gray-200 leading-relaxed space-y-2.5">
+                            <p className="font-bold text-white text-[14px] border-b border-white/[0.15] pb-2">Score Calculation Methodology</p>
+                            <p>Starts at 100, deducts points per barrier:</p>
+                            <ul className="space-y-1.5 ml-3 text-gray-300">
+                              <li>• <span className="text-red-400 font-semibold">High severity:</span> -15 points</li>
+                              <li>• <span className="text-orange-400 font-semibold">Medium severity:</span> -10 points</li>
+                              <li>• <span className="text-yellow-400 font-semibold">Low severity:</span> -5 points</li>
+                            </ul>
+                            <p>Adds <span className="text-green-400 font-semibold">+5 points</span> for each equity strength</p>
+                            <div className="text-gray-300 text-[12px] pt-2 border-t border-white/[0.15] space-y-1">
+                              <p className="font-semibold text-white mb-1">Score Ranges:</p>
+                              <p>• 85-100: Excellent equity design</p>
+                              <p>• 70-84: Good with minor issues</p>
+                              <p>• 50-69: Moderate concerns</p>
+                              <p>• Below 50: Significant barriers</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   <h2 className="print-only" style={{marginTop: 0}}>Overall Equity Score</h2>
                   <div className="grid md:grid-cols-[auto_1fr] gap-10 items-center">
@@ -829,7 +1034,10 @@ Example: Create a video presentation explaining the water cycle. Use PowerPoint 
                         <Sparkles className="w-6 h-6 text-emerald-400" />
                       </div>
                       <h2 className="print-only">Suggested Assignment Revision</h2>                      <div>
-                        <h4 className="text-xl font-bold text-white leading-tight">✨ Equity-Improved Assignment</h4>
+                        <h4 className="text-xl font-bold text-white leading-tight flex items-center gap-2">
+                          <Sparkles className="w-5 h-5 text-purple-400" />
+                          Equity-Improved Assignment
+                        </h4>
                         <p className="text-[13px] text-gray-400 mt-1 leading-[1.5]">Ready to use with all improvements implemented</p>
                       </div>
                     </div>
@@ -972,25 +1180,25 @@ Example: Create a video presentation explaining the water cycle. Use PowerPoint 
                                     </div>
                                     <div className="space-y-3">
                                       <p className="text-gray-300 text-[14px] leading-[1.8]">{barrier.researchBasis}</p>
-                                      {barrier.researchLink && (
-                                        <a
-                                          href={barrier.researchLink}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 hover:border-blue-500/50 rounded-lg transition-all duration-200 group text-[13px] font-medium text-blue-400 hover:text-blue-300"
-                                        >
-                                          <ExternalLink className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                                          <span>View Research</span>
-                                        </a>
-                                      )}
+                                      <a
+                                        href={`https://scholar.google.com/scholar?q=${encodeURIComponent(barrier.researchBasis)}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500/20 to-blue-600/20 hover:from-blue-500/30 hover:to-blue-600/30 border border-blue-500/40 hover:border-blue-400/60 rounded-xl transition-all duration-200 group text-[13px] font-semibold text-blue-300 hover:text-blue-200 shadow-lg shadow-blue-500/10"
+                                      >
+                                        <BookOpen className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                        <span>Find Research on Google Scholar</span>
+                                        <ExternalLink className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                                      </a>
                                     </div>
                                   </div>
                                   
                                   {/* Research Links */}
                                   {barrier.researchLinks && barrier.researchLinks.length > 0 && (
                                     <div>
-                                      <div className="text-gray-400 font-bold mb-3 text-[13px] uppercase tracking-wide">
-                                        📚 Supporting Research
+                                      <div className="flex items-center gap-2 text-gray-400 mb-3 text-[13px] font-bold uppercase tracking-wide">
+                                        <BookOpen className="w-4 h-4 text-purple-400" />
+                                        <strong>Supporting Research</strong>
                                       </div>
                                       <div className="space-y-3">
                                         {barrier.researchLinks.map((link, lidx) => (
@@ -1107,72 +1315,141 @@ Example: Create a video presentation explaining the water cycle. Use PowerPoint 
                   </button>
                 </div>
 
-                {/* Student Persona Selector */}
+                {/* Student Persona Simulator */}
                 <div className="bg-gradient-to-br from-white/[0.04] to-white/[0.02] backdrop-blur-2xl rounded-[28px] border border-white/[0.08] p-8">
                   <div className="flex items-center gap-3 mb-6">
                     <Eye className="w-6 h-6 text-purple-400" />
                     <div>
                       <h4 className="text-xl font-bold text-white">Student Perspective Simulator</h4>
-                      <p className="text-[13px] text-gray-400 mt-1">View barriers from different student situations</p>
+                      <p className="text-[13px] text-gray-400 mt-1">See how this specific assignment affects different students</p>
                     </div>
                   </div>
                   
                   <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {studentPersonas.map((persona) => (
-                      <button
-                        key={persona.id}
-                        onClick={() => setSelectedPersona(selectedPersona === persona.id ? null : persona.id)}
-                        className={`p-5 rounded-2xl border-2 transition-all duration-200 text-left ${
-                          selectedPersona === persona.id
-                            ? 'bg-purple-500/20 border-purple-500/50 shadow-lg shadow-purple-500/20'
-                            : 'bg-white/[0.03] border-white/[0.08] hover:border-purple-500/30'
-                        }`}
-                      >
-                        <persona.icon className={`w-8 h-8 mb-3 ${selectedPersona === persona.id ? 'text-purple-400' : 'text-gray-400'}`} />
-                        <div className="text-[15px] font-bold text-white mb-2">{persona.name}</div>
-                        <div className="text-[12px] text-gray-400 mb-3 leading-relaxed">{persona.description}</div>
-                        {selectedPersona === persona.id && (
-                          <div className="space-y-1.5 pt-3 border-t border-white/[0.08]">
-                            {persona.constraints.map((constraint, idx) => (
-                              <div key={idx} className="flex items-start gap-2 text-[11px] text-gray-300">
-                                <AlertTriangle className="w-3 h-3 text-yellow-400 flex-shrink-0 mt-0.5" />
-                                <span>{constraint}</span>
-                              </div>
-                            ))}
+                    {studentPersonas.map((persona) => {
+                      // Get barriers that affect this persona from the actual analysis
+                      const relevantBarriers = analysis.barriers.filter(b => {
+                        const category = b.category.toLowerCase();
+                        if (persona.id === 'working' && (category.includes('time') || category.includes('cost') || category.includes('economic') || category.includes('socio'))) return true;
+                        if (persona.id === 'esl' && (category.includes('language') || category.includes('cultural') || category.includes('linguistic') || category.includes('communication'))) return true;
+                        if (persona.id === 'caregiver' && (category.includes('time') || category.includes('digital') || category.includes('flexibility') || category.includes('scheduling'))) return true;
+                        if (persona.id === 'firstgen' && (category.includes('cultural') || category.includes('digital') || category.includes('academic') || category.includes('learning') || category.includes('support'))) return true;
+                        return false;
+                      });
+                      
+                      const impactCount = relevantBarriers.length;
+                      const hasHighImpact = relevantBarriers.some(b => b.severity === 'High');
+                      
+                      return (
+                        <button
+                          key={persona.id}
+                          onClick={() => setSelectedPersona(selectedPersona === persona.id ? null : persona.id)}
+                          className={`p-5 rounded-2xl border-2 transition-all duration-200 text-left ${
+                            selectedPersona === persona.id
+                              ? 'bg-purple-500/20 border-purple-500/50 shadow-lg shadow-purple-500/20'
+                              : impactCount > 0
+                              ? 'bg-white/[0.03] border-yellow-500/30 hover:border-purple-500/30'
+                              : 'bg-white/[0.03] border-white/[0.08] hover:border-purple-500/30'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <persona.icon className={`w-8 h-8 ${selectedPersona === persona.id ? 'text-purple-400' : impactCount > 0 ? 'text-yellow-400' : 'text-gray-400'}`} />
+                            {impactCount > 0 && (
+                              <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${hasHighImpact ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                                {impactCount} {impactCount === 1 ? 'barrier' : 'barriers'}
+                              </span>
+                            )}
                           </div>
-                        )}
-                      </button>
-                    ))}
+                          <div className="text-[15px] font-bold text-white mb-2">{persona.name}</div>
+                          <div className="text-[12px] text-gray-400 mb-2 leading-relaxed">{persona.description}</div>
+                          
+                          {selectedPersona === persona.id && relevantBarriers.length > 0 && (
+                            <div className="space-y-2 pt-3 border-t border-white/[0.08]">
+                              <div className="text-[11px] font-bold text-purple-300 mb-2">Assignment Specific Challenges:</div>
+                              {relevantBarriers.map((barrier, idx) => (
+                                <div key={idx} className="flex items-start gap-2 text-[11px] text-gray-300">
+                                  <AlertTriangle className={`w-3 h-3 flex-shrink-0 mt-0.5 ${
+                                    barrier.severity === 'High' ? 'text-red-400' : 
+                                    barrier.severity === 'Medium' ? 'text-yellow-400' : 
+                                    'text-blue-400'
+                                  }`} />
+                                  <div className="flex-1">
+                                    <div className="font-semibold text-purple-200">{barrier.category}</div>
+                                    <div className="mt-0.5 leading-relaxed">{barrier.description}</div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          
+                          {selectedPersona === persona.id && relevantBarriers.length === 0 && (
+                            <div className="pt-3 border-t border-white/[0.08]">
+                              <div className="flex items-start gap-2 text-[11px] text-green-400">
+                                <CheckCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
+                                <span>This assignment has minimal barriers for this student profile</span>
+                              </div>
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                   
-                  {selectedPersona && (
-                    <div className="mt-6 p-5 bg-purple-500/10 border border-purple-500/30 rounded-2xl">
-                      <div className="flex items-center gap-2 text-purple-300 mb-3">
-                        <Calculator className="w-5 h-5" />
-                        <span className="font-bold text-[14px]">Impact Analysis</span>
+                  {selectedPersona && (() => {
+                    const persona = studentPersonas.find(p => p.id === selectedPersona);
+                    const relevantBarriers = analysis.barriers.filter(b => {
+                      const category = b.category.toLowerCase();
+                      if (selectedPersona === 'working' && (category.includes('time') || category.includes('cost') || category.includes('economic') || category.includes('socio'))) return true;
+                      if (selectedPersona === 'esl' && (category.includes('language') || category.includes('cultural') || category.includes('linguistic') || category.includes('communication'))) return true;
+                      if (selectedPersona === 'caregiver' && (category.includes('time') || category.includes('digital') || category.includes('flexibility') || category.includes('scheduling'))) return true;
+                      if (selectedPersona === 'firstgen' && (category.includes('cultural') || category.includes('digital') || category.includes('academic') || category.includes('learning') || category.includes('support'))) return true;
+                      return false;
+                    });
+                    
+                    return (
+                      <div className="mt-6 p-5 bg-purple-500/10 border border-purple-500/30 rounded-2xl">
+                        <div className="flex items-center gap-2 text-purple-300 mb-3">
+                          <Calculator className="w-5 h-5" />
+                          <span className="font-bold text-[14px]">How {persona.name} Experiences This Assignment</span>
+                        </div>
+                        <div className="text-[13px] text-gray-300 leading-relaxed space-y-3">
+                          {relevantBarriers.length > 0 ? (
+                            <>
+                              <div className="flex items-start gap-2">
+                                <AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
+                                <p>
+                                  <strong>Impact Summary:</strong> This assignment presents <strong>{relevantBarriers.length}</strong> significant {relevantBarriers.length === 1 ? 'challenge' : 'challenges'} for {persona.name.toLowerCase()}s. 
+                                  {relevantBarriers.some(b => b.severity === 'High') && ' Some barriers are high severity and may prevent completion without accommodations.'}
+                                </p>
+                              </div>
+                              <div className="pl-6 space-y-2">
+                                {relevantBarriers.map((barrier, idx) => (
+                                  <div key={idx} className="text-[12px] text-gray-300">
+                                    <div className="flex items-start gap-2">
+                                      <span className="font-semibold text-purple-300 flex-shrink-0">→</span>
+                                      <span>{barrier.description || barrier.category}</span>
+                                    </div>
+                                    {barrier.recommendation && (
+                                      <div className="ml-4 mt-1 text-green-400">
+                                        <span className="font-semibold">Solution:</span> {barrier.recommendation}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="flex items-start gap-2">
+                              <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
+                              <p>
+                                <strong>Positive Assessment:</strong> This assignment does not present major barriers specific to {persona.name.toLowerCase()}s. However, review the general recommendations to ensure all students can succeed.
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-[13px] text-gray-300 leading-relaxed">
-                        {analysis.barriers.filter(b => {
-                          const persona = studentPersonas.find(p => p.id === selectedPersona);
-                          if (selectedPersona === 'working' && (b.category.includes('Time') || b.category.includes('Cost'))) return true;
-                          if (selectedPersona === 'esl' && (b.category.includes('Language') || b.category.includes('Cultural'))) return true;
-                          if (selectedPersona === 'caregiver' && (b.category.includes('Time') || b.category.includes('Digital'))) return true;
-                          if (selectedPersona === 'first-gen' && (b.category.includes('Cultural') || b.category.includes('Digital'))) return true;
-                          return false;
-                        }).length > 0 ? (
-                          <p><strong>⚠️ High Impact:</strong> This assignment has {analysis.barriers.filter(b => {
-                            if (selectedPersona === 'working' && (b.category.includes('Time') || b.category.includes('Cost'))) return true;
-                            if (selectedPersona === 'esl' && (b.category.includes('Language') || b.category.includes('Cultural'))) return true;
-                            if (selectedPersona === 'caregiver' && (b.category.includes('Time') || b.category.includes('Digital'))) return true;
-                            if (selectedPersona === 'first-gen' && (b.category.includes('Cultural') || b.category.includes('Digital'))) return true;
-                            return false;
-                          }).length} barrier(s) that particularly affect this student profile.</p>
-                        ) : (
-                          <p><strong>✓ Lower Impact:</strong> This assignment has fewer barriers specific to this student profile, but review general recommendations.</p>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
 
                 {/* AI Chat Panel */}
@@ -1288,7 +1565,7 @@ Example: Create a video presentation explaining the water cycle. Use PowerPoint 
                   <div className="bg-gradient-to-br from-white/[0.04] to-white/[0.02] backdrop-blur-2xl rounded-[28px] border border-white/[0.08] p-8">
                     <div className="flex items-center gap-3 mb-6">
                       <FileText className="w-6 h-6 text-pink-400" />
-                      <h4 className="text-xl font-bold text-white">Equity-Focused Grading Rubric</h4>
+                      <h4 className="text-xl font-bold text-white">Equity Focused Grading Rubric</h4>
                     </div>
                     
                     <div className="overflow-x-auto">
@@ -1338,22 +1615,36 @@ Example: Create a video presentation explaining the water cycle. Use PowerPoint 
                     
                     <div className="mt-6 p-5 bg-pink-500/10 border border-pink-500/30 rounded-2xl">
                       <p className="text-[13px] text-gray-300 leading-relaxed">
-                        <strong className="text-pink-300">💡 Tip:</strong> Use this rubric when designing assignments to ensure equity is built in from the start, not added as an afterthought.
+                        <div className="flex items-start gap-2">
+                          <Lightbulb className="w-5 h-5 text-pink-400 flex-shrink-0 mt-0.5" />
+                          <p className="text-gray-300 text-sm leading-relaxed">
+                            <strong className="text-pink-300">Tip:</strong> Use this rubric when designing assignments to ensure equity is built in from the start, not added as an afterthought.
+                          </p>
+                        </div>
                       </p>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Print-only footer */}
-              <div className="print-only print-footer">
-                <p><strong>Document Generated:</strong> {new Date().toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' })}</p>
-                <p><strong>Analyzed By:</strong> DIKE - AI powered equity analysis for inclusive education</p>
-                <p><strong>Created By:</strong> Utkarsh Priyadarshi | EdPol 212: Education for Social Justice</p>
-                <p style={{marginTop: '10px', fontSize: '9pt', color: '#999'}}>
-                  This analysis is grounded in Universal Design for Learning (UDL), culturally responsive teaching,<br/>
-                  and educational equity research frameworks. Powered by Llama 3.3.
-                </p>
+              {/* Print-only professional footer */}
+              <div className="print-only" style={{marginTop: '40px', paddingTop: '20px', borderTop: '2px solid #e5e7eb', pageBreakInside: 'avoid'}}>
+                <div style={{textAlign: 'center', marginBottom: '15px'}}>
+                  <p style={{fontSize: '9pt', color: '#666', margin: '0 0 8px 0', lineHeight: '1.6'}}>
+                    This analysis is grounded in Universal Design for Learning (UDL), culturally responsive pedagogy,<br/>
+                    and evidence-based educational equity research frameworks.
+                  </p>
+                </div>
+                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #e5e7eb', paddingTop: '15px'}}>
+                  <div style={{fontSize: '9pt', color: '#666'}}>
+                    <p style={{margin: '0 0 3px 0'}}><strong style={{color: '#000'}}>Created by:</strong> Utkarsh Priyadarshi</p>
+                    <p style={{margin: 0}}>© 2025 DIKE AI. All rights reserved.</p>
+                  </div>
+                  <div style={{textAlign: 'right', fontSize: '9pt', color: '#666'}}>
+                    <p style={{margin: '0 0 3px 0'}}><strong style={{color: '#000'}}>Report Generated:</strong> {new Date().toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' })}</p>
+                    <p style={{margin: 0}}>DIKE AI - Educational Equity Analyzer</p>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -1364,7 +1655,9 @@ Example: Create a video presentation explaining the water cycle. Use PowerPoint 
           <div className="max-w-[1400px] mx-auto px-8 py-12 space-y-8">
             {/* Key Resources for Educators */}
             <div className="max-w-4xl mx-auto">
-              <h4 className="text-lg font-bold text-white text-center mb-6">📚 Essential Research & Resources</h4>
+              <h4 className="text-lg font-bold text-white text-center mb-6">
+                Essential Research & Resources
+              </h4>
               <div className="grid md:grid-cols-2 gap-4">
                 {[
                   { 
@@ -1409,14 +1702,15 @@ Example: Create a video presentation explaining the water cycle. Use PowerPoint 
 
             {/* Creator Credit */}
             <div className="text-center space-y-4 pt-8 border-t border-white/[0.06]">
-              <p className="text-gray-400 text-[14px] font-medium">
-                Created by <span className="text-transparent bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text font-bold">Utkarsh Priyadarshi</span>
+              <p className="text-[12px] text-gray-500 max-w-3xl mx-auto leading-relaxed">
+                Advancing educational equity through Universal Design for Learning and culturally responsive pedagogy.
               </p>
-              <p className="text-gray-500 text-[12px] font-medium">EdPol 212: Education for Social Justice</p>
-              <p className="text-[12px] text-gray-600 max-w-2xl mx-auto leading-relaxed">
-                AI-powered analysis grounded in Universal Design for Learning, culturally responsive teaching,
-                and educational equity research frameworks.
-              </p>
+              <div className="space-y-2 pt-2">
+                <p className="text-gray-400 text-[13px] font-medium">
+                  Developed by <span className="text-transparent bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text font-bold">Utkarsh Priyadarshi</span>
+                </p>
+                <p className="text-gray-600 text-[11px] pt-2">© 2025 DIKE AI. All rights reserved.</p>
+              </div>
             </div>
           </div>
         </footer>
