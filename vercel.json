@@ -1,4 +1,5 @@
 {
+  "version": 2,
   "builds": [
     {
       "src": "package.json",
@@ -6,9 +7,21 @@
       "config": {
         "distDir": "dist"
       }
+    },
+    {
+      "src": "server.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/server.js"
+    },
+    {
+      "src": "/images/(.*)",
+      "dest": "/images/$1"
+    },
     {
       "src": "/assets/(.*)",
       "dest": "/assets/$1"
